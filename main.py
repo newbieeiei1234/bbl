@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.auth.auth import router as authRouter
+from api.booking.router import router as bookingRouter
 from db.models.base import Base
 from db.db_connection import engine
 
@@ -14,3 +15,4 @@ app.add_middleware(
 )
 
 app.include_router(authRouter)
+app.include_router(bookingRouter)

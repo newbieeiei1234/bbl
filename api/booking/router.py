@@ -7,16 +7,19 @@ from db.models.bookings import Bookings
 from sqlalchemy import select
 from pydantic import BaseModel, Field
 
-router = APIRouter("/bookings")
+router = APIRouter(prefix="/bookings")
+
+@router.get("")
+def getMyBookings(user: Users = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(Bookings).filter(Bookings.owner_id == user.id)
+    result = db.execute(stmt).scalars().all()
+    return {"data": result}
 
 @router.get("/all")
 def getAllBooking(user: Users = Depends(get_current_user), db: Session = Depends(get_db)):
-    stmt = None
     if not user.admin_status:
-        stmt = select(Bookings).filter(Bookings.owner_id == user.id)
-    else:
-        stmt = select(Bookings)
-    result = db.execute(stmt).all()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+    result = db.execute(select(Bookings)).scalars().all()
     return {"data": result}
 
 class CreateNewBookingRequest(BaseModel):
@@ -25,7 +28,7 @@ class CreateNewBookingRequest(BaseModel):
     start_time: str = Field(min_length=1, max_length=10)
     end_time: str = Field(min_length=1, max_length=10)
 
-@router.post("/new")
+@router.post("")
 def createNewBooking(req: CreateNewBookingRequest, user: Users = Depends(get_current_user), db: Session = Depends(get_db)):
     booking = Bookings(
         name=req.name,
@@ -55,14 +58,8 @@ def editBooking(req: EditBookingRequest, user: Users = Depends(get_current_user)
     if booking.owner_id != user.id and not user.admin_status:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to edit this booking")
 
-    if req.name is not None:
-        booking.name = req.name
-    if req.detail is not None:
-        booking.detail = req.detail
-    if req.start_time is not None:
-        booking.start_time = req.start_time
-    if req.end_time is not None:
-        booking.end_time = req.end_time
+    for field, value in req.model_dump(exclude={"id"}, exclude_none=True).items():
+        setattr(booking, field, value)
 
     db.commit()
     db.refresh(booking)
